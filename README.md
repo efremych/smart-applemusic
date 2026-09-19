@@ -1,6 +1,7 @@
 # Goofy для Apple Music — страница авторизации
 
-Публичная страница для обновления music user token. Хостится на GitHub Pages.
+Публичная страница для обновления music user token. Хостится на GitHub Pages:
+https://efremych.github.io/smart-applemusic/
 
 ## Как пользоваться
 
