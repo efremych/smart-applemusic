@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Smart Apple Music — авторизация</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://js-cdn.music.apple.com/musickit/v1/musickit.js"></script>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; max-width: 640px;
+         margin: 40px auto; padding: 0 16px; background: #fafafa; color: #222; }
+  h1 { font-size: 22px; } h2 { font-size: 16px; color: #666; }
+  input { width: 100%; padding: 10px; box-sizing: border-box; margin: 6px 0;
+          border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
+  button { padding: 12px 24px; border: 0; border-radius: 8px; background: #fa2d48;
+           color: #fff; font-size: 15px; cursor: pointer; margin-top: 8px; }
+  button:disabled { background: #ccc; cursor: default; }
+  .step { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px;
+          padding: 16px 20px; margin: 16px 0; }
+  #status { margin-top: 12px; font-size: 14px; }
+  #sendStatus { margin-top: 10px; font-size: 14px; }
+  #sendBox { display: none; }
+  #tokenBox { display: none; margin-top: 12px; }
+  #token { width: 100%; box-sizing: border-box; font-family: monospace;
+           font-size: 12px; word-break: break-all; background: #f0f0f0;
+           border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+  .ok { color: #1a7f37; } .err { color: #d1242f; }
+</style>
+</head>
+<body>
+<h1>Авторизация Apple Music</h1>
+<h2>Обновление music user token для проекта «Smart Apple Music»</h2>
+
+<div class="step">
+  <b>Шаг 1.</b> Вставь сюда свой developer token (тот, что сгенерировал скрипт):
+  <input type="text" id="devToken" placeholder="eyJhbGciOiJFUzI1NiIs…" autocomplete="off">
+</div>
+
+<div class="step">
+  <b>Шаг 2.</b> Нажми кнопку — откроется окно входа Apple:
+  <br>
+  <button id="btn" disabled>Загрузка MusicKit…</button>
+  <div id="status"></div>
+</div>
+
+<div class="step" id="tokenBox">
+  <b>Шаг 3.</b> Скопируй music user token и сохрани его вместе с developer token:
+  <div id="token"></div>
+  <br>
+  <button onclick="copyToken()">Скопировать токен</button>
+</div>
+
+<div class="step" id="sendBox">
+  <b>Шаг 4 (необязательно).</b> Отправить токен прямо в скрипт, без ручной вставки:
+  <input type="text" id="endpointUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+  <input type="password" id="inboxSecret" placeholder="секрет из INBOX_SECRET" autocomplete="off">
+  <button id="sendBtn" onclick="sendToken()">Отправить токен в скрипт</button>
+  <div id="sendStatus"></div>
+</div>
+
+<script>
+const btn = document.getElementById("btn");
+const statusEl = document.getElementById("status");
+const input = document.getElementById("devToken");
+
+input.value = localStorage.getItem("devToken") || "";
+
+// Устойчиво к гонке событий: проверяем и по событию, и по таймеру
+function tryEnable() {
+  if (window.MusicKit) {
+    btn.disabled = false;
+    btn.textContent = "Войти через Apple";
+    statusEl.innerHTML = '<span class="ok">MusicKit загружен — можно входить.</span>';
+    return true;
+  }
+  return false;
+}
+document.addEventListener("musickitloaded", tryEnable);
+let attempts = 0;
+const poll = setInterval(() => {
+  if (tryEnable() || ++attempts > 40) {  // 40 x 250 мс = 10 секунд
+    clearInterval(poll);
+    if (!window.MusicKit) statusEl.innerHTML =
+      '<span class="err">MusicKit не загрузился за 10 сек. Обнови страницу (Ctrl+F5).</span>';
+  }
+}, 250);
+
+btn.addEventListener("click", async () => {
+  const devToken = input.value.trim();
+  if (!devToken) { statusEl.innerHTML = '<span class="err">Сначала вставь developer token</span>'; return; }
+  localStorage.setItem("devToken", devToken);
+  btn.disabled = true; btn.textContent = "Авторизация…";
+  try {
+    await MusicKit.configure({ developerToken: devToken, app: { name: "GoofyAuth", build: "1.0.0" } });
+    const music = MusicKit.getInstance();
+    const userToken = await music.authorize();
+    document.getElementById("token").textContent = userToken;
+    document.getElementById("tokenBox").style.display = "block";
+    document.getElementById("sendBox").style.display = "block";
+    statusEl.innerHTML = '<span class="ok">Готово! Токен получен.</span>';
+  } catch (e) {
+    statusEl.innerHTML = '<span class="err">Ошибка: ' + (e.message || e) + '</span>';
+  }
+  btn.disabled = false; btn.textContent = "Войти через Apple";
+});
+
+function copyToken() {
+  navigator.clipboard.writeText(document.getElementById("token").textContent)
+    .then(() => alert("Скопировано!"));
+}
+
+// Шаг 4: отправка токена в Apps Script. Content-Type text/plain —
+// намеренно: application/json вызвал бы CORS-preflight, на который
+// Apps Script не отвечает, а text/plain проходит как «простой» запрос.
+const urlInput = document.getElementById("endpointUrl");
+const secretInput = document.getElementById("inboxSecret");
+urlInput.value = localStorage.getItem("endpointUrl") || "";
+secretInput.value = localStorage.getItem("inboxSecret") || "";
+
+async function sendToken() {
+  const sendStatus = document.getElementById("sendStatus");
+  const endpoint = urlInput.value.trim();
+  const secret = secretInput.value.trim();
+  const token = document.getElementById("token").textContent;
+  if (!endpoint || !secret) {
+    sendStatus.innerHTML = '<span class="err">Заполни адрес эндпоинта и секрет.</span>';
+    return;
+  }
+  localStorage.setItem("endpointUrl", endpoint);
+  localStorage.setItem("inboxSecret", secret);
+  document.getElementById("sendBtn").disabled = true;
+  sendStatus.textContent = "Отправка…";
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ secret, token }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      sendStatus.innerHTML = '<span class="ok">Токен принят и проверен скриптом! Подтверждение придёт на почту.</span>';
+    } else {
+      sendStatus.innerHTML = '<span class="err">Скрипт отклонил токен: ' + (data.error || "?") +
+        (data.status ? " (HTTP " + data.status + ")" : "") + '</span>';
+    }
+  } catch (e) {
+    sendStatus.innerHTML = '<span class="err">Ошибка сети: ' + (e.message || e) + '</span>';
+  }
+  document.getElementById("sendBtn").disabled = false;
+}
+</script>
+</body>
+</html>
