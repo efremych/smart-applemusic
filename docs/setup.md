@@ -46,23 +46,29 @@
 
 > **Важно:** после любого изменения кода — «Управление развертываниями» → карандаш → «Новая версия» → «Развернуть», иначе эндпоинт работает по-старому.
 
-## 5. Триггеры (по одному запуску каждой функции)
+## 5. Хранилище (папка и таблица на Google Диске)
+
+Запустить один раз: `setupProjectStorage` — создаст папку `SmartAppleMusic`
+и таблицу `History` внутри неё, id сохранит в свойства сам
+(`DRIVE_FOLDER_ID`, `HISTORY_SHEET_ID`).
+
+## 6. Триггеры (по одному запуску каждой функции)
 
 ```
 refreshDevToken          ← заполнит AM_DEV_TOKEN
 installDevTokenTrigger   ← раз в 30 дней
 installWatchdogTrigger   ← каждый день
-installScrobblerTrigger  ← каждый час
+installScrobblerTrigger  ← каждые 15 минут
 ```
 
-## 6. Music user token
+## 7. Music user token
 
 1. Открыть страницу авторизации (GitHub Pages).
 2. Вставить developer token → «Войти через Apple» (Apple ID с подпиской).
 3. «Отправить токен в скрипт»: URL эндпоинта + `INBOX_SECRET`.
 4. Придёт письмо-подтверждение на Gmail.
 
-## 7. Last.fm
+## 8. Last.fm
 
 1. `printLastfmAuthUrl` → открыть ссылку из лога → «Yes, allow access» → «Готово!».
 2. Проверка: `testLastfmSession`.
